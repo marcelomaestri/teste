@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Interativo: Chile 1920-1970 (Política e Cultura)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    
+    <!-- 
+        Chosen Palette: Calm Neutrals & Earth Tones (#fdfbf7, #f0ead2, #dde5b6, #adc178, #a98467, #6c584c)
+    -->
+    <!-- 
+        Application Structure Plan: 
+        A SPA (Single-Page Application) com navegação sticky no topo, dividida em três seções temáticas (Visão Geral, Eixos Políticos, A Voz Cultural).
+        1.  Visão Geral: Um explorador de linha do tempo interativo. O usuário clica em um período (ex: "Anos 40") e o JS atualiza dinamicamente os blocos de texto "Contexto Político" e "Contexto Cultural", além de um gráfico de rosca (Chart.js) mostrando o foco econômico da era (Salitre -> ISI).
+        2.  Eixos Políticos: Um "dashboard" focado nos dados quantitativos da polarização: o gráfico de barras empilhadas dos "Três Terços" e o gráfico de barras da eleição de 1970.
+        3.  A Voz Cultural: Foco na análise qualitativa (Violeta Parra). Um diagrama HTML/CSS (sem SVG/Mermaid) mostra seu processo (Resgate -> Denúncia -> Legado). Um seletor interativo (dropdown) permite ao usuário carregar a análise textual de "La Carta" (do analise_la_carta.md) ou outras canções.
+        Essa estrutura de "abas" foi escolhida para separar a narrativa, os dados quantitativos e a análise qualitativa, permitindo uma exploração mais fácil e menos linear do que um infográfico de rolagem única.
+    -->
+    <!-- 
+        Visualization & Content Choices:
+        - (Visão Geral) Foco Econômico: [Dado: Mudança Econômica (Salitre vs ISI)] -> [Goal: Informar/Comparar] -> [Viz: Gráfico de Rosca (Chart.js)] -> [Interação: Atualizado por JS ao clicar na linha do tempo] -> [Justificativa: Composição simples da economia da era.] -> [Lib: Chart.js (Canvas)]
+        - (Eixos Políticos) Três Terços: [Dado: Composição do Congresso 1961-1969] -> [Goal: Mudança/Comparar] -> [Viz: Gráfico de Barras Empilhadas (Chart.js)] -> [Interação: Tooltip] -> [Justificativa: Melhor forma de ver composição de blocos ao longo do tempo.] -> [Lib: Chart.js (Canvas)]
+        - (Eixos Políticos) Eleição 1970: [Dado: Votação Allende/Alessandri/Tomic] -> [Goal: Comparar] -> [Viz: Gráfico de Barras Horizontais (Chart.js)] -> [Interação: Tooltip] -> [Justificativa: Comparação direta e clara dos resultados.] -> [Lib: Chart.js (Canvas)]
+        - (Voz Cultural) Legado de Parra: [Dado: Processo (Resgate -> Denúncia -> Legado)] -> [Goal: Organizar] -> [Viz: Diagrama de Fluxo (HTML/CSS)] -> [Interação: Estático] -> [Justificativa: Evita SVG/Mermaid, visual limpo para processo.] -> [Lib: HTML/Tailwind]
+        - (Voz Cultural) Análise de Canção: [Dado: Análise de "La Carta" (qualitativo)] -> [Goal: Informar] -> [Viz: Bloco de Texto Dinâmico] -> [Interação: Dropdown (onchange) atualiza o texto via JS.] -> [Justificativa: Permite exploração interativa de dados textuais.] -> [Lib: JS/HTML]
+    -->
+    <!-- 
+        CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
+    -->
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fdfbf7;
+            color: #6c584c;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .nav-link {
+            transition: color 0.3s, border-bottom-color 0.3s;
+        }
+        .nav-link.active {
+            color: #a98467;
+            border-bottom-color: #a98467;
+        }
+        .timeline-btn {
+            transition: all 0.3s;
+        }
+        .timeline-btn.active {
+            background-color: #a98467;
+            color: #fdfbf7;
+            transform: scale(1.05);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <header class="max-w-6xl mx-auto text-center mb-8">
+        <h1 class="text-3xl md:text-5xl font-extrabold text-[#6c584c] mb-3">Chile 1920-1970</h1>
+        <p class="text-lg md:text-xl text-[#a98467] font-medium">Uma Exploração Interativa da Política e Cultura</p>
+    </header>
+
+    <nav class="sticky top-0 z-10 bg-[#fdfbf7] shadow-md mb-8">
+        <div class="max-w-6xl mx-auto flex justify-center items-center space-x-4 md:space-x-8 p-4">
+            <a href="#visao-geral" id="nav-visao-geral" class="nav-link text-sm md:text-lg font-semibold text-[#6c584c] hover:text-[#a98467] border-b-2 border-transparent pb-1">Visão Geral</a>
+            <a href="#eixos-politicos" id="nav-eixos-politicos" class="nav-link text-sm md:text-lg font-semibold text-[#6c584c] hover:text-[#a98467] border-b-2 border-transparent pb-1">Eixos Políticos</a>
+            <a href="#voz-cultural" id="nav-voz-cultural" class="nav-link text-sm md:text-lg font-semibold text-[#6c584c] hover:text-[#a98467] border-b-2 border-transparent pb-1">A Voz Cultural</a>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto space-y-16">
+
+        <!-- ===== SEÇÃO 1: VISÃO GERAL (TIMELINE INTERATIVA) ===== -->
+        <section id="visao-geral" class="space-y-6 pt-8">
+            <h2 class="text-2xl font-bold text-center text-[#6c584c] mb-6">Linha do Tempo Interativa</h2>
+            <p class="text-center max-w-3xl mx-auto text-base text-[#6c584c] mb-8">
+                A história do Chile neste período não foi linear. Foi uma complexa interação entre instabilidade econômica, modernização estatal e o despertar da consciência cultural. Clique nos períodos abaixo para explorar a interação entre política e cultura em cada momento.
+            </p>
+
+            <div class="flex flex-wrap justify-center gap-2 md:gap-4 mb-8">
+                <button id="btn-1920" class="timeline-btn text-sm md:text-base font-semibold py-3 px-4 md:px-6 rounded-lg bg-[#f0ead2] text-[#6c584c] hover:bg-[#dde5b6]">1920-1938: Crise e Populismo</button>
+                <button id="btn-1938" class="timeline-btn text-sm md:text-base font-semibold py-3 px-4 md:px-6 rounded-lg bg-[#f0ead2] text-[#6c584c] hover:bg-[#dde5b6]">1938-1952: Era Radical (ISI)</button>
+                <button id="btn-1952" class="timeline-btn text-sm md:text-base font-semibold py-3 px-4 md:px-6 rounded-lg bg-[#f0ead2] text-[#6c584c] hover:bg-[#dde5b6]">1952-1964: Reformas Iniciais</button>
+                <button id="btn-1964" class="timeline-btn text-sm md:text-base font-semibold py-3 px-4 md:px-6 rounded-lg bg-[#f0ead2] text-[#6c584c] hover:bg-[#dde5b6]">1964-1970: Polarização</button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-lg shadow-md p-6 border-t-4 border-[#a98467]">
+                        <h3 class="text-xl font-bold text-[#6c584c] mb-3">Contexto Político</h3>
+                        <p id="content-politico" class="text-base text-[#6c584c]"></p>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-6 border-t-4 border-[#adc178]">
+                        <h3 class="text-xl font-bold text-[#6c584c] mb-3">Contexto Cultural</h3>
+                        <p id="content-cultural" class="text-base text-[#6c584c]"></p>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-xl font-bold text-center text-[#6c584c] mb-4">Foco Econômico da Era</h3>
+                    <div class="chart-container h-[250px] max-h-[300px]">
+                        <canvas id="economiaChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SEÇÃO 2: EIXOS POLÍTICOS (DASHBOARD) ===== -->
+        <section id="eixos-politicos" class="space-y-8 pt-16">
+            <h2 class="text-2xl font-bold text-center text-[#6c584c] mb-6">Eixos Políticos: Os "Três Terços"</h2>
+            <p class="text-center max-w-3xl mx-auto text-base text-[#6c584c] mb-8">
+                Os anos 60 consolidaram a divisão política do Chile em três blocos ideológicos quase intransponíveis: a Direita (Conservadora), o Centro (Democracia Cristã) e a Esquerda (Socialista-Comunista). Esta seção visualiza essa fragmentação que definiu a eleição de 1970.
+            </p>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-xl font-bold text-center text-[#6c584c] mb-4">Composição da Câmara (1961-1969)</h3>
+                    <div class="chart-container">
+                        <canvas id="congressoChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-xl font-bold text-center text-[#6c584c] mb-4">Eleição Presidencial de 1970</h3>
+                    <div class="chart-container">
+                        <canvas id="eleicaoChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SEÇÃO 3: A VOZ CULTURAL (VIOLETA PARRA) ===== -->
+        <section id="voz-cultural" class="space-y-8 pt-16">
+            <h2 class="text-2xl font-bold text-center text-[#6c584c] mb-6">A Voz Cultural: O Legado de Violeta Parra</h2>
+            <p class="text-center max-w-3xl mx-auto text-base text-[#6c584c] mb-8">
+                Não se pode entender a ascensão da Esquerda chilena sem a revolução cultural liderada por Violeta Parra. Ela resgatou a identidade popular e a transformou em uma ferramenta de denúncia política, inspirando o movimento da "Nueva Canción Chilena" que deu voz à Unidade Popular.
+            </p>
+            
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-xl font-bold text-center text-[#6c584c] mb-6">O Processo de Violeta Parra</h3>
+                <div class="flex flex-col md:flex-row justify-around items-center space-y-4 md:space-y-0 md:space-x-4">
+                    <div class="text-center p-4 rounded-lg bg-[#f0ead2] w-full md:w-1/3">
+                        <span class="text-4xl">🎶</span>
+                        <h4 class="text-lg font-bold text-[#6c584c]">1. Resgate</h4>
+                        <p class="text-sm text-[#6c584c]">Coleta do folclore rural e camponês (Anos 50).</p>
+                    </div>
+                    <div class="text-2xl font-bold text-[#a98467] transform rotate-90 md:rotate-0">→</div>
+                    <div class="text-center p-4 rounded-lg bg-[#dde5b6] w-full md:w-1/3">
+                        <span class="text-4xl">✊</span>
+                        <h4 class="text-lg font-bold text-[#6c584c]">2. Denúncia</h4>
+                        <p class="text-sm text-[#6c584c]">Uso da arte (canções, arpilleras) para crítica social (Anos 60).</p>
+                    </div>
+                    <div class="text-2xl font-bold text-[#a98467] transform rotate-90 md:rotate-0">→</div>
+                    <div class="text-center p-4 rounded-lg bg-[#adc178] w-full md:w-1/3">
+                        <span class="text-4xl">🎸</span>
+                        <h4 class="text-lg font-bold text-[#6c584c]">3. Legado</h4>
+                        <p class="text-sm text-[#6c584c]">Inspiração da "Nueva Canción Chilena" (Victor Jara, etc.).</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-xl font-bold text-center text-[#6c584c] mb-4">Análise de Canção Interativa</h3>
+                <p class="text-center text-base text-[#6c584c] mb-6">
+                    A obra de Parra é um documento histórico. Selecione uma canção para ler uma análise formal de seu significado político e social, baseada no arquivo `analise_la_carta.md`.
+                </p>
+                <div class="max-w-md mx-auto">
+                    <select id="song-selector" class="w-full p-3 border-2 border-[#dde5b6] rounded-lg bg-white text-[#6c584c] font-semibold focus:outline-none focus:border-[#a98467]">
+                        <option value="default">Selecione uma canção...</option>
+                        <option value="la-carta">La Carta</option>
+                        <option value="arauco">Arauco Tiene una Pena</option>
+                    </select>
+                </div>
+                <div id="song-analysis-content" class="mt-6 p-6 bg-[#f0ead2] rounded-lg min-h-[150px] text-[#6c584c] italic">
+                    <p>A análise da canção selecionada aparecerá aqui.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="mt-16 text-center text-sm text-[#a98467]">
+        <p>Dashboard Interativo SPA. Todos os gráficos via Chart.js (Canvas). Todos os diagramas via HTML/CSS.</p>
+    </footer>
+
+    <script>
+        // --- DADOS PARA INTERAÇÃO ---
+
+        const timelineContent = {
+            "1920": {
+                politico: "Fim do Parlamentarismo Oligárquico. Ascensão de Arturo Alessandri. Instabilidade crônica e intervenções militares. Promulgação da Constituição de 1925, que restaura o presidencialismo. A Grande Depressão de 1929 devasta a economia do salitre.",
+                cultural: "A cultura popular é dominada por formas europeias (Tango, Foxtrot). A música folclórica é vista como algo marginal, restrito ao campo. Violeta Parra nasce (1917) e vive sua infância neste período de crise.",
+                economia: { labels: ['Salitre (Exportação)', 'Agricultura', 'Indústria (Incipiente)'], data: [60, 30, 10], colors: ['#a98467', '#adc178', '#dde5b6'] }
+            },
+            "1938": {
+                politico: "Ascensão da Frente Popular (Partido Radical). O Estado assume um papel central. É criada a CORFO (1939) para impulsionar a Industrialização por Substituição de Importações (ISI). Foco em infraestrutura (energia, aço).",
+                cultural: "Início da migração campo-cidade. A cultura urbana cresce. O rádio difunde boleros e música mexicana. O folclore ainda é visto como 'antigo'. Violeta Parra começa a cantar profissionalmente, mas ainda não foca no resgate.",
+                economia: { labels: ['Indústria (ISI)', 'Mineração (Cobre)', 'Agricultura'], data: [40, 35, 25], colors: ['#adc178', '#a98467', '#dde5b6'] }
+            },
+            "1952": {
+                politico: "A industrialização continua, mas a inflação cresce. A 'Lei Maldita' (1948) proíbe o Partido Comunista, acirrando tensões da Guerra Fria. Surgem os primeiros debates sobre a necessidade de Reforma Agrária.",
+                cultural: "Violeta Parra inicia seu trabalho fundamental de resgate etnomusicológico. Viaja pelo Chile coletando canções. Seu trabalho começa a dar dignidade e visibilidade à identidade camponesa e popular.",
+                economia: { labels: ['Indústria (ISI)', 'Mineração (Cobre)', 'Agricultura (Latifúndio)'], data: [45, 40, 15], colors: ['#adc178', '#a98467', '#dde5b6'] }
+            },
+            "1964": {
+                politico: "Auge da polarização. O governo da Democracia Cristã (Eduardo Frei) implementa a 'Revolução em Liberdade': aprofunda a Reforma Agrária e inicia a 'Chilenização' do Cobre. A Direita e a Esquerda se radicalizam em oposição.",
+                cultural: "O trabalho de Parra floresce em denúncia política ('La Carta', 'Arauco'). Ela funda a 'Peña de los Parra', que se torna o berço da 'Nueva Canción Chilena'. Victor Jara e outros politizam o folclore, criando a trilha sonora da Unidade Popular.",
+                economia: { labels: ['Indústria (ISI)', 'Cobre (Chilenização)', 'Reforma Agrária'], data: [40, 50, 10], colors: ['#adc178', '#a98467', '#dde5b6'] }
+            }
+        };
+
+        const songAnalyses = {
+            "default": "<p>A análise da canção selecionada aparecerá aqui.</p>",
+            "la-carta": `
+                <h4 class='font-bold text-lg mb-2'>Análise: "La Carta" (c. 1962-63)</h4>
+                <p class='not-italic text-sm leading-relaxed'>
+                    Esta composição é um ponto de inflexão na obra de Parra, transpondo sua arte do folclore para a intervenção sociopolítica direta.
+                    <br><br>
+                    <strong>1. Catálise Pessoal:</strong> A canção nasce em um período de luto (morte da filha) e rompimento (com Gilbert Favré). Ela transfere essa angústia pessoal para uma causa coletiva.
+                    <br><br>
+                    <strong>2. Alegoria da Injustiça:</strong> A morte do companheiro por "pesar / por ver tanta injustiça social" é uma metáfora da tragédia estrutural. O hospital torna-se o cenário do colapso social.
+                    <br><br>
+                    <strong>3. Denúncia Estatal:</strong> A letra denuncia explicitamente a repressão a greves e a violência policial ("una mano me ha pegado en el pecho / y otra me ha cortado el pelo...").
+                    <br><br>
+                    <strong>4. Conclusão:</strong> "La Carta" é um hino precursor da Nueva Canción Chilena, consolidando o estatuto de Parra como a figura matricial da canção de protesto latino-americana.
+                </p>
+            `,
+            "arauco": `
+                <h4 class='font-bold text-lg mb-2'>Análise: "Arauco Tiene una Pena" (c. 1960)</h4>
+                <p class='not-italic text-sm leading-relaxed'>
+                    Esta canção é uma das denúncias mais potentes e historicamente significativas de Violeta Parra, focada na opressão secular do povo Mapuche.
+                    <br><br>
+                    <strong>1. Denúncia Histórica:</strong> A música quebra o silêncio sobre a "Questão Mapuche". A "pena" (tristeza/sofrimento) do Arauco (região Mapuche) é apresentada como resultado de séculos de injustiça desde a colonização.
+                    <br><br>
+                    <strong>2. Crítica à República:</strong> Parra não culpa apenas os colonizadores espanhóis; ela critica o Estado chileno moderno por continuar a opressão ("Ya no son los españoles / los que les hacen llorar, / hoy son los propios chilenos / los que les quitan su pan.").
+                    <br><br>
+                    <strong>3. Chamado à Consciência:</strong> Ao levar esta realidade ao público urbano de Santiago, Parra usou sua plataforma cultural para forçar a sociedade a confrontar uma injustiça fundacional, ligando a luta indígena à luta de classes mais ampla.
+                </p>
+            `
+        };
+
+        // --- LÓGICA DE NAVEGAÇÃO E INTERAÇÃO ---
+
+        let economiaChartInstance = null;
+        const navLinks = {};
+        const timelineButtons = {};
+        let currentSection = 'visao-geral';
+
+        // Função de utilidade Chart.js (Label Wrap e Tooltip)
+        function wrapLabels(label) {
+            if (typeof label === 'string' && label.length > 16) {
+                const words = label.split(' ');
+                const lines = [];
+                let currentLine = '';
+                words.forEach(word => {
+                    if ((currentLine + ' ' + word).trim().length > 16) {
+                        if (currentLine.length > 0) lines.push(currentLine.trim());
+                        currentLine = word;
+                    } else {
+                        currentLine = (currentLine + ' ' + word).trim();
+                    }
+                });
+                if (currentLine.length > 0) lines.push(currentLine.trim());
+                return lines;
+            }
+            return label;
+        }
+        
+        const tooltipTitleCallback = (tooltipItems) => {
+            const item = tooltipItems[0];
+            let label = item.chart.data.labels[item.dataIndex];
+            if (Array.isArray(label)) {
+                return label.join(' ');
+            }
+            return label;
+        };
+
+        const chartDefaultOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        title: tooltipTitleCallback
+                    }
+                },
+                legend: {
+                    labels: {
+                        color: '#6c584c',
+                        font: {
+                            family: "'Inter', sans-serif"
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { 
+                        color: '#6c584c', 
+                        font: { family: "'Inter', sans-serif" }
+                    },
+                    grid: { display: false }
+                },
+                y: {
+                    ticks: { 
+                        color: '#6c584c',
+                        font: { family: "'Inter', sans-serif" }
+                    },
+                    grid: { color: '#f0ead2' }
+                }
+            }
+        };
+
+        // 1. Lógica da Navegação Principal (Abas)
+        function showSection(sectionId) {
+            document.querySelectorAll('main section').forEach(section => {
+                section.style.display = 'none';
+            });
+            document.getElementById(sectionId).style.display = 'block';
+
+            Object.values(navLinks).forEach(link => link.classList.remove('active'));
+            navLinks[sectionId].classList.add('active');
+            currentSection = sectionId;
+        }
+
+        // 2. Lógica da Timeline Interativa (Visão Geral)
+        function updateEconomiaChart(data) {
+            if (economiaChartInstance) {
+                economiaChartInstance.data.labels = data.labels;
+                economiaChartInstance.data.datasets[0].data = data.data;
+                economiaChartInstance.data.datasets[0].backgroundColor = data.colors;
+                economiaChartInstance.update();
+            }
+        }
+
+        function showTimelineContent(decade) {
+            const content = timelineContent[decade];
+            document.getElementById('content-politico').textContent = content.politico;
+            document.getElementById('content-cultural').textContent = content.cultural;
+            updateEconomiaChart(content.economia);
+
+            Object.values(timelineButtons).forEach(btn => btn.classList.remove('active'));
+            timelineButtons[decade].classList.add('active');
+        }
+
+        // 3. Lógica da Análise de Canções (Voz Cultural)
+        function showSongAnalysis() {
+            const selectedSong = document.getElementById('song-selector').value;
+            document.getElementById('song-analysis-content').innerHTML = songAnalyses[selectedSong];
+        }
+
+        // 4. Inicialização dos Gráficos (Eixos Políticos - Estáticos)
+        function initStaticCharts() {
+            const ctxCongresso = document.getElementById('congressoChart')?.getContext('2d');
+            if (ctxCongresso) {
+                new Chart(ctxCongresso, {
+                    type: 'bar',
+                    data: {
+                        labels: ['1961', '1965', '1969'],
+                        datasets: [
+                            {
+                                label: 'Direita',
+                                data: [35, 25, 28],
+                                backgroundColor: '#a98467'
+                            },
+                            {
+                                label: 'Centro (DC)',
+                                data: [22, 43, 30],
+                                backgroundColor: '#dde5b6'
+                            },
+                            {
+                                label: 'Esquerda (FRAP/UP)',
+                                data: [28, 23, 32],
+                                backgroundColor: '#adc178'
+                            }
+                        ]
+                    },
+                    options: {
+                        ...chartDefaultOptions,
+                        plugins: {
+                            ...chartDefaultOptions.plugins,
+                            title: {
+                                display: false,
+                            }
+                        },
+                        scales: {
+                            x: { ...chartDefaultOptions.scales.x, stacked: true },
+                            y: { ...chartDefaultOptions.scales.y, stacked: true, max: 100 }
+                        }
+                    }
+                });
+            }
+
+            const ctxEleicao = document.getElementById('eleicaoChart')?.getContext('d');
+            if (ctxEleicao) {
+                const eleicaoLabels = [
+                    wrapLabels('Salvador Allende (Esquerda)'),
+                    wrapLabels('Jorge Alessandri (Direita)'),
+                    wrapLabels('Radomiro Tomic (Centro)')
+                ];
+                new Chart(ctxEleicao, {
+                    type: 'bar',
+                    data: {
+                        labels: eleicaoLabels,
+                        datasets: [{
+                            label: 'Votos (%)',
+                            data: [36.6, 35.3, 28.1],
+                            backgroundColor: [
+                                '#adc178',
+                                '#a98467',
+                                '#dde5b6'
+                            ],
+                        }]
+                    },
+                    options: {
+                        ...chartDefaultOptions,
+                        indexAxis: 'y',
+                        plugins: {
+                            ...chartDefaultOptions.plugins,
+                            legend: { display: false },
+                        },
+                        scales: {
+                             x: { ...chartDefaultOptions.scales.x, max: 40, title: { display: true, text: '%' } },
+                             y: { ...chartDefaultOptions.scales.y }
+                        }
+                    }
+                });
+            }
+        }
+
+        // 5. Inicialização do Gráfico Dinâmico (Visão Geral)
+        function initDynamicCharts() {
+            const ctxEconomia = document.getElementById('economiaChart')?.getContext('d');
+            if (ctxEconomia) {
+                economiaChartInstance = new Chart(ctxEconomia, {
+                    type: 'doughnut',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            data: [],
+                            backgroundColor: [],
+                            borderColor: '#fdfbf7',
+                            borderWidth: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            tooltip: chartDefaultOptions.plugins.tooltip,
+                            legend: {
+                                labels: {
+                                    color: '#6c584c',
+                                    font: { family: "'Inter', sans-serif" }
+                                },
+                                position: 'bottom'
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // --- INICIALIZAÇÃO GERAL ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Cache de Seletores
+            navLinks['visao-geral'] = document.getElementById('nav-visao-geral');
+            navLinks['eixos-politicos'] = document.getElementById('nav-eixos-politicos');
+            navLinks['voz-cultural'] = document.getElementById('nav-voz-cultural');
+
+            timelineButtons['1920'] = document.getElementById('btn-1920');
+            timelineButtons['1938'] = document.getElementById('btn-1938');
+            timelineButtons['1952'] = document.getElementById('btn-1952');
+            timelineButtons['1964'] = document.getElementById('btn-1964');
+
+            // Listeners da Navegação Principal
+            Object.keys(navLinks).forEach(key => {
+                navLinks[key].addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showSection(key);
+                    window.scrollTo({ top: document.getElementById(key).offsetTop - 100, behavior: 'smooth' });
+                });
+            });
+
+            // Listeners da Timeline
+            Object.keys(timelineButtons).forEach(key => {
+                timelineButtons[key].addEventListener('click', () => showTimelineContent(key));
+            });
+            
+            // Listener do Seletor de Canções
+            document.getElementById('song-selector').addEventListener('change', showSongAnalysis);
+
+            // Inicialização dos Gráficos
+            initStaticCharts();
+            initDynamicCharts();
+
+            // Estado Inicial
+            showSection('visao-geral');
+            showTimelineContent('1920');
+            showSongAnalysis();
+        });
+
+    </script>
+</body>
+</html>
+
